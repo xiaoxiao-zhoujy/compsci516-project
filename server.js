@@ -4,6 +4,9 @@ const mysql = require("mysql2/promise");
 
 const app = express();
 const PORT = 3001;
+const SEARCH_FIELDS = new Set(["title", "author", "genre"]);
+const SEARCH_RESULT_LIMIT = 8;
+const RECOMMENDATION_LIMIT = 5;
 
 const pool = mysql.createPool({
   host: "127.0.0.1",
@@ -16,51 +19,64 @@ const pool = mysql.createPool({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+function parsePositiveInt(value) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function sendServerError(res, context, error) {
+  console.error(`${context}:`, error);
+  res.status(500).json({ error: "Server error" });
+}
+
+function getTrimmedQueryParam(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 app.get("/api/search", async (req, res) => {
   try {
-    const q = (req.query.q || "").trim();
-    const field = (req.query.field || "author").trim().toLowerCase();
+    const q = getTrimmedQueryParam(req.query.q);
+    const field = getTrimmedQueryParam(req.query.field || "author").toLowerCase();
 
     if (!q) {
       return res.json([]);
     }
 
-    let sql;
-    let params = [`%${q}%`];
+    if (!SEARCH_FIELDS.has(field)) {
+      return res.status(400).json({ error: "field must be one of title, author, or genre" });
+    }
 
-    if (field === "title") {
-      sql = `
+    const params = [`%${q}%`];
+    const searchQueries = {
+      title: `
         SELECT book_id, title, author
         FROM books
         WHERE title LIKE ?
-        ORDER BY title ASC
-        LIMIT 8
-      `;
-    } else if (field === "author") {
-      sql = `
+        ORDER BY title ASC, author ASC, book_id ASC
+        LIMIT ${SEARCH_RESULT_LIMIT}
+      `,
+      author: `
         SELECT book_id, title, author
         FROM books
         WHERE author LIKE ?
-        ORDER BY author ASC
-        LIMIT 5
-      `;
-    } else if (field === "genre") {
-      sql = `
+        ORDER BY author ASC, title ASC, book_id ASC
+        LIMIT ${SEARCH_RESULT_LIMIT}
+      `,
+      genre: `
         SELECT DISTINCT b.book_id, b.title, b.author
         FROM books b
         JOIN book_genres bg ON b.hardcover_id = bg.hardcover_id
         JOIN genres g ON bg.genre_id = g.genre_id
         WHERE g.genre_name LIKE ?
-        ORDER BY b.title ASC
-        LIMIT 8;
-      `;
-    }
+        ORDER BY b.title ASC, b.author ASC, b.book_id ASC
+        LIMIT ${SEARCH_RESULT_LIMIT}
+      `,
+    };
 
-    const [rows] = await pool.execute(sql, [`%${q}%`]);
+    const [rows] = await pool.execute(searchQueries[field], params);
     res.json(rows);
   } catch (error) {
-    console.error("Search error:", error);
-    res.status(500).json({ error: "Server error" });
+    sendServerError(res, "Search error", error);
   }
 });
 
@@ -318,9 +334,17 @@ app.get("/api/book/:id/status", async (req, res) => {
 // ── Recommendations: GET /api/recommendations/:id ──
 app.get("/api/recommendations/:id", async (req, res) => {
   try {
-    const bookId = req.params.id;
+    const bookId = parsePositiveInt(req.params.id);
+    const uid = req.query.uid ? parsePositiveInt(req.query.uid) : null;
 
-    // Get the book's primary genre
+    if (!bookId) {
+      return res.status(400).json({ error: "book id must be a positive integer" });
+    }
+
+    if (req.query.uid && !uid) {
+      return res.status(400).json({ error: "uid must be a positive integer" });
+    }
+
     const [books] = await pool.execute(
       `SELECT primary_genre FROM books WHERE book_id = ?`,
       [bookId]
@@ -336,20 +360,40 @@ app.get("/api/recommendations/:id", async (req, res) => {
       return res.json([]);
     }
 
-    // Get 5 random books from the same genre, excluding the current book
-    const [rows] = await pool.execute(
-      `SELECT book_id, title, author, cover_image_url, average_rating
-       FROM books
-       WHERE primary_genre = ? AND book_id != ?
-       ORDER BY RAND()
-       LIMIT 5`,
-      [genre, bookId]
-    );
+    let sql = `
+      SELECT b.book_id, b.title, b.author, b.cover_image_url, b.average_rating
+      FROM books b
+      WHERE b.primary_genre = ?
+        AND b.book_id != ?
+    `;
+    const params = [genre, bookId];
+
+    if (uid) {
+      sql += `
+        AND NOT EXISTS (
+          SELECT 1
+          FROM read_books rb
+          WHERE rb.uid = ? AND rb.book_id = b.book_id
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM want_to_read wtr
+          WHERE wtr.uid = ? AND wtr.book_id = b.book_id
+        )
+      `;
+      params.push(uid, uid);
+    }
+
+    sql += `
+      ORDER BY b.average_rating DESC, b.title ASC, b.book_id ASC
+      LIMIT ${RECOMMENDATION_LIMIT}
+    `;
+
+    const [rows] = await pool.execute(sql, params);
 
     res.json(rows);
   } catch (error) {
-    console.error("Recommendations error:", error);
-    res.status(500).json({ error: "Server error" });
+    sendServerError(res, "Recommendations error", error);
   }
 });
 

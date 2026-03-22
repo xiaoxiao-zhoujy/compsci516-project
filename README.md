@@ -46,6 +46,28 @@ Can then see rendered version of website at: http://localhost:3000
 
 ----------------------------------------------------------------------
 
+## API notes
+
+### Search
+
+`GET /api/search?q=<query>&field=<title|author|genre>`
+
+- `q` is trimmed before searching; a blank query returns an empty list.
+- `field` must be one of `title`, `author`, or `genre`; any other value returns `400`.
+- Search returns a consistent book summary shape: `book_id`, `title`, and `author`.
+- Genre search uses the `book_genres` and `genres` tables and returns distinct books only.
+
+### Recommendations
+
+`GET /api/recommendations/:id`
+
+- Recommendations are based on the selected book's `primary_genre`.
+- Results exclude the selected book itself.
+- Books are ranked by higher `average_rating`, then `title`, then `book_id` for stable demo output.
+- The route returns up to 5 books with the current recommendation card fields.
+- Optional query param: `uid=<user id>`
+  - When present, books already saved in the user's `read_books` or `want_to_read` lists are excluded.
+
 ## Load dataset into MySQL (Docker)
 
 We provide a helper script to start a MySQL 8 container and load our SQL dump.

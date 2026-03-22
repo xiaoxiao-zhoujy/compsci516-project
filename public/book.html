@@ -295,8 +295,13 @@
 
       async function loadRecommendations() {
         const recEl = document.getElementById("recommendations");
+        const uid = localStorage.getItem("uid");
+        const query = uid ? `?uid=${encodeURIComponent(uid)}` : "";
         try {
-          const res = await fetch(`/api/recommendations/${bookId}`);
+          const res = await fetch(`/api/recommendations/${bookId}${query}`);
+          if (!res.ok) {
+            throw new Error("Recommendations request failed");
+          }
           const books = await res.json();
 
           if (!books.length) {
