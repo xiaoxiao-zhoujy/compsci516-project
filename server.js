@@ -49,7 +49,7 @@ async function createUniqueInviteCode(conn) {
     const inviteCode = generateInviteCode();
     const [rows] = await conn.execute(
       "SELECT challenge_id FROM reading_challenges WHERE invite_code = ?",
-      [inviteCode]
+      [inviteCode],
     );
 
     if (rows.length === 0) {
@@ -58,49 +58,6 @@ async function createUniqueInviteCode(conn) {
   }
 
   throw new Error("Unable to generate a unique invite code");
-}
-
-async function ensureDatabaseTables() {
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS reading_challenges (
-      challenge_id INT NOT NULL AUTO_INCREMENT,
-      name VARCHAR(150) NOT NULL,
-      description VARCHAR(255) DEFAULT NULL,
-      invite_code VARCHAR(20) NOT NULL,
-      created_by INT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (challenge_id),
-      UNIQUE KEY invite_code (invite_code),
-      CONSTRAINT fk_reading_challenges_user
-        FOREIGN KEY (created_by) REFERENCES users(uid) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS challenge_members (
-      challenge_id INT NOT NULL,
-      uid INT NOT NULL,
-      joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (challenge_id, uid),
-      CONSTRAINT fk_challenge_members_challenge
-        FOREIGN KEY (challenge_id) REFERENCES reading_challenges(challenge_id) ON DELETE CASCADE,
-      CONSTRAINT fk_challenge_members_user
-        FOREIGN KEY (uid) REFERENCES users(uid) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
-
-  await pool.execute(`
-    CREATE TABLE IF NOT EXISTS challenge_books (
-      challenge_id INT NOT NULL,
-      book_id INT NOT NULL,
-      added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (challenge_id, book_id),
-      CONSTRAINT fk_challenge_books_challenge
-        FOREIGN KEY (challenge_id) REFERENCES reading_challenges(challenge_id) ON DELETE CASCADE,
-      CONSTRAINT fk_challenge_books_book
-        FOREIGN KEY (book_id) REFERENCES books(book_id) ON DELETE CASCADE
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-  `);
 }
 
 function buildRecommendationReason(matchedGenres, averageRating) {
@@ -115,7 +72,9 @@ function pickRecommendations(candidateRows, limit) {
   const pool = candidateRows
     .slice(0, RECOMMENDATION_POOL_LIMIT)
     .map((row, index) => {
-      const normalizedRating = row.average_rating ? Number(row.average_rating) : 0;
+      const normalizedRating = row.average_rating
+        ? Number(row.average_rating)
+        : 0;
       return {
         ...row,
         randomWeight:
@@ -128,7 +87,10 @@ function pickRecommendations(candidateRows, limit) {
   const selected = [];
 
   while (pool.length > 0 && selected.length < limit) {
-    const totalWeight = pool.reduce((sum, candidate) => sum + candidate.randomWeight, 0);
+    const totalWeight = pool.reduce(
+      (sum, candidate) => sum + candidate.randomWeight,
+      0,
+    );
     let threshold = Math.random() * totalWeight;
     let chosenIndex = 0;
 
@@ -145,28 +107,35 @@ function pickRecommendations(candidateRows, limit) {
   }
 
   return selected.sort((left, right) => {
-    const ratingDiff = (Number(right.average_rating) || 0) - (Number(left.average_rating) || 0);
+    const ratingDiff =
+      (Number(right.average_rating) || 0) - (Number(left.average_rating) || 0);
     if (right.overlap_count !== left.overlap_count) {
       return right.overlap_count - left.overlap_count;
     }
     if (ratingDiff !== 0) {
       return ratingDiff;
     }
-    return left.title.localeCompare(right.title) || left.book_id - right.book_id;
+    return (
+      left.title.localeCompare(right.title) || left.book_id - right.book_id
+    );
   });
 }
 
 app.get("/api/search", async (req, res) => {
   try {
     const q = getTrimmedQueryParam(req.query.q);
-    const field = getTrimmedQueryParam(req.query.field || "author").toLowerCase();
+    const field = getTrimmedQueryParam(
+      req.query.field || "author",
+    ).toLowerCase();
 
     if (!q) {
       return res.json([]);
     }
 
     if (!SEARCH_FIELDS.has(field)) {
-      return res.status(400).json({ error: "field must be one of title, author, or genre" });
+      return res
+        .status(400)
+        .json({ error: "field must be one of title, author, or genre" });
     }
 
     const params = [`%${q}%`];
@@ -213,7 +182,7 @@ app.get("/api/book/:id", async (req, res) => {
       `SELECT book_id, title, author, isbn, average_rating, description,
               cover_image_url, primary_genre, pages
        FROM books WHERE book_id = ?`,
-      [bookId]
+      [bookId],
     );
 
     if (books.length === 0) {
@@ -227,7 +196,7 @@ app.get("/api/book/:id", async (req, res) => {
        JOIN book_genres bg ON g.genre_id = bg.genre_id
        JOIN books b ON b.hardcover_id = bg.hardcover_id
        WHERE b.book_id = ?`,
-      [bookId]
+      [bookId],
     );
 
     const book = books[0];
@@ -246,7 +215,9 @@ app.post("/api/rate", async (req, res) => {
     const { uid, book_id, rating } = req.body;
 
     if (!uid || !book_id || !rating) {
-      return res.status(400).json({ error: "uid, book_id, and rating are required" });
+      return res
+        .status(400)
+        .json({ error: "uid, book_id, and rating are required" });
     }
 
     if (rating < 1 || rating > 5) {
@@ -262,19 +233,19 @@ app.post("/api/rate", async (req, res) => {
         `INSERT INTO ratings (uid, book_id, rating)
          VALUES (?, ?, ?)
          ON DUPLICATE KEY UPDATE rating = ?`,
-        [uid, book_id, rating, rating]
+        [uid, book_id, rating, rating],
       );
 
       // Automatically add to read_books list
       await conn.execute(
         `INSERT IGNORE INTO read_books (uid, book_id) VALUES (?, ?)`,
-        [uid, book_id]
+        [uid, book_id],
       );
 
       // Remove from want_to_read if it exists (book can't be in both lists)
       await conn.execute(
         `DELETE FROM want_to_read WHERE uid = ? AND book_id = ?`,
-        [uid, book_id]
+        [uid, book_id],
       );
 
       await conn.commit();
@@ -299,11 +270,13 @@ app.get("/api/book/:id/ratings", async (req, res) => {
     const [rows] = await pool.execute(
       `SELECT AVG(rating) AS avg_rating, COUNT(*) AS num_ratings
        FROM ratings WHERE book_id = ?`,
-      [bookId]
+      [bookId],
     );
 
     res.json({
-      avg_rating: rows[0].avg_rating ? parseFloat(rows[0].avg_rating).toFixed(2) : null,
+      avg_rating: rows[0].avg_rating
+        ? parseFloat(rows[0].avg_rating).toFixed(2)
+        : null,
       num_ratings: rows[0].num_ratings,
     });
   } catch (error) {
@@ -328,13 +301,13 @@ app.post("/api/mark-read", async (req, res) => {
       // Add to read_books
       await conn.execute(
         `INSERT IGNORE INTO read_books (uid, book_id) VALUES (?, ?)`,
-        [uid, book_id]
+        [uid, book_id],
       );
 
       // Remove from want_to_read (can't be in both)
       await conn.execute(
         `DELETE FROM want_to_read WHERE uid = ? AND book_id = ?`,
-        [uid, book_id]
+        [uid, book_id],
       );
 
       await conn.commit();
@@ -367,13 +340,13 @@ app.post("/api/mark-want-to-read", async (req, res) => {
       // Add to want_to_read
       await conn.execute(
         `INSERT IGNORE INTO want_to_read (uid, book_id) VALUES (?, ?)`,
-        [uid, book_id]
+        [uid, book_id],
       );
 
       // Remove from read_books (can't be in both)
       await conn.execute(
         `DELETE FROM read_books WHERE uid = ? AND book_id = ?`,
-        [uid, book_id]
+        [uid, book_id],
       );
 
       await conn.commit();
@@ -399,13 +372,13 @@ app.post("/api/unmark", async (req, res) => {
       return res.status(400).json({ error: "uid and book_id are required" });
     }
 
-    await pool.execute(
-      `DELETE FROM read_books WHERE uid = ? AND book_id = ?`,
-      [uid, book_id]
-    );
+    await pool.execute(`DELETE FROM read_books WHERE uid = ? AND book_id = ?`, [
+      uid,
+      book_id,
+    ]);
     await pool.execute(
       `DELETE FROM want_to_read WHERE uid = ? AND book_id = ?`,
-      [uid, book_id]
+      [uid, book_id],
     );
 
     res.json({ message: "Book unmarked" });
@@ -427,17 +400,17 @@ app.get("/api/book/:id/status", async (req, res) => {
 
     const [readRows] = await pool.execute(
       `SELECT 1 FROM read_books WHERE uid = ? AND book_id = ?`,
-      [uid, bookId]
+      [uid, bookId],
     );
 
     const [wantRows] = await pool.execute(
       `SELECT 1 FROM want_to_read WHERE uid = ? AND book_id = ?`,
-      [uid, bookId]
+      [uid, bookId],
     );
 
     const [ratingRows] = await pool.execute(
       `SELECT rating FROM ratings WHERE uid = ? AND book_id = ?`,
-      [uid, bookId]
+      [uid, bookId],
     );
 
     let status = null;
@@ -461,7 +434,9 @@ app.get("/api/recommendations/:id", async (req, res) => {
     const uid = req.query.uid ? parsePositiveInt(req.query.uid) : null;
 
     if (!bookId) {
-      return res.status(400).json({ error: "book id must be a positive integer" });
+      return res
+        .status(400)
+        .json({ error: "book id must be a positive integer" });
     }
 
     if (req.query.uid && !uid) {
@@ -470,7 +445,7 @@ app.get("/api/recommendations/:id", async (req, res) => {
 
     const [books] = await pool.execute(
       `SELECT book_id, primary_genre FROM books WHERE book_id = ?`,
-      [bookId]
+      [bookId],
     );
 
     if (books.length === 0) {
@@ -484,7 +459,7 @@ app.get("/api/recommendations/:id", async (req, res) => {
        JOIN books b ON b.hardcover_id = bg.hardcover_id
        WHERE b.book_id = ?
        ORDER BY g.genre_name ASC`,
-      [bookId]
+      [bookId],
     );
 
     const selectedGenres = genreRows.map((row) => row.genre_name);
@@ -543,16 +518,25 @@ app.get("/api/recommendations/:id", async (req, res) => {
         return right.overlap_count - left.overlap_count;
       }
 
-      const ratingDiff = (Number(right.average_rating) || 0) - (Number(left.average_rating) || 0);
+      const ratingDiff =
+        (Number(right.average_rating) || 0) -
+        (Number(left.average_rating) || 0);
       if (ratingDiff !== 0) {
         return ratingDiff;
       }
 
-      return left.title.localeCompare(right.title) || left.book_id - right.book_id;
+      return (
+        left.title.localeCompare(right.title) || left.book_id - right.book_id
+      );
     });
 
-    const recommendations = pickRecommendations(rankedRows, RECOMMENDATION_LIMIT).map((row) => {
-      const matchedGenres = row.matched_genres ? row.matched_genres.split("||") : [];
+    const recommendations = pickRecommendations(
+      rankedRows,
+      RECOMMENDATION_LIMIT,
+    ).map((row) => {
+      const matchedGenres = row.matched_genres
+        ? row.matched_genres.split("||")
+        : [];
 
       return {
         book_id: row.book_id,
@@ -578,12 +562,14 @@ app.post("/api/register", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-      return res.status(400).json({ error: "username and password are required" });
+      return res
+        .status(400)
+        .json({ error: "username and password are required" });
     }
 
     const [existing] = await pool.execute(
       "SELECT uid FROM users WHERE username = ?",
-      [username]
+      [username],
     );
 
     if (existing.length > 0) {
@@ -592,7 +578,7 @@ app.post("/api/register", async (req, res) => {
 
     const [result] = await pool.execute(
       "INSERT INTO users (username, password) VALUES (?, ?)",
-      [username, password]
+      [username, password],
     );
 
     res.json({ uid: result.insertId, username });
@@ -608,12 +594,14 @@ app.post("/api/login", async (req, res) => {
     const { username, password } = req.body;
 
     if (!username || !password) {
-      return res.status(400).json({ error: "username and password are required" });
+      return res
+        .status(400)
+        .json({ error: "username and password are required" });
     }
 
     const [rows] = await pool.execute(
       "SELECT uid, username FROM users WHERE username = ? AND password = ?",
-      [username, password]
+      [username, password],
     );
 
     if (rows.length === 0) {
@@ -638,7 +626,7 @@ app.get("/api/user/:uid/library", async (req, res) => {
        JOIN books b ON rb.book_id = b.book_id
        WHERE rb.uid = ?
        ORDER BY b.title ASC`,
-      [uid]
+      [uid],
     );
 
     const [wantRows] = await pool.execute(
@@ -647,7 +635,7 @@ app.get("/api/user/:uid/library", async (req, res) => {
        JOIN books b ON wtr.book_id = b.book_id
        WHERE wtr.uid = ?
        ORDER BY b.title ASC`,
-      [uid]
+      [uid],
     );
 
     res.json({ read_books: readRows, want_to_read: wantRows });
@@ -668,7 +656,7 @@ app.get("/api/user/:uid/ratings", async (req, res) => {
        JOIN books b ON r.book_id = b.book_id
        WHERE r.uid = ?
        ORDER BY b.title ASC`,
-      [uid]
+      [uid],
     );
 
     res.json(rows);
@@ -683,7 +671,8 @@ app.post("/api/challenges", async (req, res) => {
   try {
     const uid = parsePositiveInt(req.body.uid);
     const name = getTrimmedQueryParam(req.body.name);
-    const description = getTrimmedQueryParam(req.body.description).slice(0, 255) || null;
+    const description =
+      getTrimmedQueryParam(req.body.description).slice(0, 255) || null;
 
     if (!uid) {
       return res.status(400).json({ error: "uid is required" });
@@ -697,7 +686,10 @@ app.post("/api/challenges", async (req, res) => {
     try {
       await conn.beginTransaction();
 
-      const [userRows] = await conn.execute("SELECT uid FROM users WHERE uid = ?", [uid]);
+      const [userRows] = await conn.execute(
+        "SELECT uid FROM users WHERE uid = ?",
+        [uid],
+      );
       if (userRows.length === 0) {
         await conn.rollback();
         return res.status(404).json({ error: "User not found" });
@@ -705,13 +697,14 @@ app.post("/api/challenges", async (req, res) => {
 
       const [wantRows] = await conn.execute(
         "SELECT book_id FROM want_to_read WHERE uid = ? ORDER BY book_id ASC",
-        [uid]
+        [uid],
       );
 
       if (wantRows.length === 0) {
         await conn.rollback();
         return res.status(400).json({
-          error: "Add at least one book to your Want to Read list before creating a challenge",
+          error:
+            "Add at least one book to your Want to Read list before creating a challenge",
         });
       }
 
@@ -719,14 +712,14 @@ app.post("/api/challenges", async (req, res) => {
       const [result] = await conn.execute(
         `INSERT INTO reading_challenges (name, description, invite_code, created_by)
          VALUES (?, ?, ?, ?)`,
-        [name, description, inviteCode, uid]
+        [name, description, inviteCode, uid],
       );
 
       const challengeId = result.insertId;
 
       await conn.execute(
         "INSERT INTO challenge_members (challenge_id, uid) VALUES (?, ?)",
-        [challengeId, uid]
+        [challengeId, uid],
       );
 
       await conn.execute(
@@ -734,7 +727,7 @@ app.post("/api/challenges", async (req, res) => {
          SELECT ?, book_id
          FROM want_to_read
          WHERE uid = ?`,
-        [challengeId, uid]
+        [challengeId, uid],
       );
 
       await conn.commit();
@@ -763,7 +756,9 @@ app.post("/api/challenges/join", async (req, res) => {
     const inviteCode = getTrimmedQueryParam(req.body.invite_code).toUpperCase();
 
     if (!uid || !inviteCode) {
-      return res.status(400).json({ error: "uid and invite_code are required" });
+      return res
+        .status(400)
+        .json({ error: "uid and invite_code are required" });
     }
 
     const conn = await pool.getConnection();
@@ -774,7 +769,7 @@ app.post("/api/challenges/join", async (req, res) => {
         `SELECT challenge_id, name
          FROM reading_challenges
          WHERE invite_code = ?`,
-        [inviteCode]
+        [inviteCode],
       );
 
       if (challengeRows.length === 0) {
@@ -786,7 +781,7 @@ app.post("/api/challenges/join", async (req, res) => {
       const [result] = await conn.execute(
         `INSERT IGNORE INTO challenge_members (challenge_id, uid)
          VALUES (?, ?)`,
-        [challenge.challenge_id, uid]
+        [challenge.challenge_id, uid],
       );
 
       await conn.commit();
@@ -829,7 +824,7 @@ app.get("/api/challenges/user/:uid", async (req, res) => {
        JOIN challenge_members cm ON cm.challenge_id = c.challenge_id
        WHERE cm.uid = ?
        ORDER BY c.created_at DESC, c.challenge_id DESC`,
-      [uid, uid]
+      [uid, uid],
     );
 
     res.json(rows);
@@ -845,18 +840,22 @@ app.get("/api/challenges/:id", async (req, res) => {
     const uid = parsePositiveInt(req.query.uid);
 
     if (!challengeId || !uid) {
-      return res.status(400).json({ error: "challenge id and uid are required" });
+      return res
+        .status(400)
+        .json({ error: "challenge id and uid are required" });
     }
 
     const [membershipRows] = await pool.execute(
       `SELECT 1
        FROM challenge_members
        WHERE challenge_id = ? AND uid = ?`,
-      [challengeId, uid]
+      [challengeId, uid],
     );
 
     if (membershipRows.length === 0) {
-      return res.status(403).json({ error: "You must join this challenge before viewing it" });
+      return res
+        .status(403)
+        .json({ error: "You must join this challenge before viewing it" });
     }
 
     const [challengeRows] = await pool.execute(
@@ -870,7 +869,7 @@ app.get("/api/challenges/:id", async (req, res) => {
        FROM reading_challenges c
        JOIN users u ON c.created_by = u.uid
        WHERE c.challenge_id = ?`,
-      [challengeId]
+      [challengeId],
     );
 
     if (challengeRows.length === 0) {
@@ -883,7 +882,7 @@ app.get("/api/challenges/:id", async (req, res) => {
        JOIN users u ON cm.uid = u.uid
        WHERE cm.challenge_id = ?
        ORDER BY u.username ASC`,
-      [challengeId]
+      [challengeId],
     );
 
     const [bookRows] = await pool.execute(
@@ -892,7 +891,7 @@ app.get("/api/challenges/:id", async (req, res) => {
        JOIN books b ON cb.book_id = b.book_id
        WHERE cb.challenge_id = ?
        ORDER BY b.title ASC`,
-      [challengeId]
+      [challengeId],
     );
 
     res.json({
@@ -905,13 +904,6 @@ app.get("/api/challenges/:id", async (req, res) => {
   }
 });
 
-ensureDatabaseTables()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Server running at http://localhost:${PORT}`);
-    });
-  })
-  .catch((error) => {
-    console.error("Database setup error:", error);
-    process.exit(1);
-  });
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
