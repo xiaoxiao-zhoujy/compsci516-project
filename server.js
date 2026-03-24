@@ -21,6 +21,10 @@ const pool = mysql.createPool({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
+app.get("/health", (req, res) => {
+  res.status(200).send("ok");
+});
+
 function parsePositiveInt(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
