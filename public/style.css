@@ -478,3 +478,67 @@ h1 {
   flex-wrap: wrap;
   gap: 16px;
 }
+
+.review-section {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ddd;
+}
+
+.leave-review {
+  margin-bottom: 1.5rem;
+}
+
+.review-textarea {
+  width: 100%;
+  max-width: 100%;
+  min-height: 100px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.review-actions {
+  margin-top: 0.75rem;
+}
+
+.reviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.review-card {
+  padding: 1rem;
+  border: 1px solid #e2e2e2;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.review-user {
+  font-weight: 700;
+}
+
+.review-stars {
+  color: #f4b400;
+  letter-spacing: 1px;
+}
+
+.review-body {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}

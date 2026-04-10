@@ -431,6 +431,121 @@ app.get("/api/book/:id/status", async (req, res) => {
   }
 });
 
+// ── Get reviews for a book: GET /api/book/:id/reviews ──
+app.get("/api/book/:id/reviews", async (req, res) => {
+  try {
+    const bookId = parsePositiveInt(req.params.id);
+
+    if (!bookId) {
+      return res
+        .status(400)
+        .json({ error: "book id must be a positive integer" });
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT username, rating, review, created_at
+       FROM reviews
+       WHERE book_id = ?
+       ORDER BY created_at DESC`,
+      [bookId],
+    );
+
+    res.json(rows);
+  } catch (error) {
+    console.error("Get reviews error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── Create or update a review: POST /api/review ──
+app.post("/api/review", async (req, res) => {
+  try {
+    const uid = parsePositiveInt(req.body.uid);
+    const bookId = parsePositiveInt(req.body.book_id);
+    const rating = Number.parseInt(req.body.rating, 10);
+    const username = getTrimmedQueryParam(req.body.username);
+    const review = getTrimmedQueryParam(req.body.review);
+
+    if (!uid || !bookId || !username || !review || !Number.isInteger(rating)) {
+      return res.status(400).json({
+        error: "uid, book_id, username, rating, and review are required",
+      });
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({ error: "Rating must be between 1 and 5" });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Make sure the user exists
+      const [userRows] = await conn.execute(
+        `SELECT uid FROM users WHERE uid = ?`,
+        [uid],
+      );
+
+      if (userRows.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Make sure the book exists
+      const [bookRows] = await conn.execute(
+        `SELECT book_id FROM books WHERE book_id = ?`,
+        [bookId],
+      );
+
+      if (bookRows.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ error: "Book not found" });
+      }
+
+      // Save/update the review
+      await conn.execute(
+        `INSERT INTO reviews (uid, book_id, username, rating, review)
+         VALUES (?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           username = VALUES(username),
+           rating = VALUES(rating),
+           review = VALUES(review)`,
+        [uid, bookId, username, rating, review],
+      );
+
+      // Optional but recommended: keep ratings table in sync too
+      await conn.execute(
+        `INSERT INTO ratings (uid, book_id, rating)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE rating = VALUES(rating)`,
+        [uid, bookId, rating],
+      );
+
+      // Optional: if they reviewed it, treat it as read
+      await conn.execute(
+        `INSERT IGNORE INTO read_books (uid, book_id) VALUES (?, ?)`,
+        [uid, bookId],
+      );
+
+      await conn.execute(
+        `DELETE FROM want_to_read WHERE uid = ? AND book_id = ?`,
+        [uid, bookId],
+      );
+
+      await conn.commit();
+      res.json({ message: "Review saved successfully" });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error("Review save error:", error);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // ── Recommendations: GET /api/recommendations/:id ──
 app.get("/api/recommendations/:id", async (req, res) => {
   try {
