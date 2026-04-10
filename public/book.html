@@ -19,6 +19,24 @@
       const params = new URLSearchParams(window.location.search);
       const bookId = params.get("id");
 
+      function renderStars(rating) {
+        const safeRating = Math.max(0, Math.min(5, Number(rating) || 0));
+        let stars = "";
+        for (let i = 1; i <= 5; i++) {
+          stars += i <= safeRating ? "★" : "☆";
+        }
+        return stars;
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
       function renderAuthHeader() {
         const headerEl = document.getElementById("auth-header");
         if (!headerEl) return;
@@ -76,9 +94,11 @@
           detailEl.innerHTML = `
             <div class="book-layout">
               <div class="book-cover">
-                ${book.cover_image_url
-                  ? `<img src="${book.cover_image_url}" alt="${book.title}" />`
-                  : `<div class="no-cover">No Cover</div>`}
+                ${
+                  book.cover_image_url
+                    ? `<img src="${book.cover_image_url}" alt="${book.title}" />`
+                    : `<div class="no-cover">No Cover</div>`
+                }
               </div>
               <div class="book-info">
                 <h1>${book.title}</h1>
@@ -90,13 +110,17 @@
                 </p>
                 <p class="book-rating">
                   Average Rating: ${book.average_rating || "N/A"} / 5
-                  ${ratingsData.num_ratings > 0
-                    ? `<br>User Ratings: ${ratingsData.avg_rating} / 5 (${ratingsData.num_ratings} ratings)`
-                    : ""}
+                  ${
+                    ratingsData.num_ratings > 0
+                      ? `<br>User Ratings: ${ratingsData.avg_rating} / 5 (${ratingsData.num_ratings} ratings)`
+                      : ""
+                  }
                 </p>
-                ${book.genres && book.genres.length > 0
-                  ? `<p class="book-genres">Genres: ${book.genres.join(", ")}</p>`
-                  : ""}
+                ${
+                  book.genres && book.genres.length > 0
+                    ? `<p class="book-genres">Genres: ${book.genres.join(", ")}</p>`
+                    : ""
+                }
                 <p class="book-description">${book.description || "No description available."}</p>
 
                 <div class="action-buttons">
@@ -115,6 +139,32 @@
                     <span class="star" data-value="5">&#9733;</span>
                   </div>
                   <p id="rate-message"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="review-section">
+                  <h3>Reviews</h3>
+
+                  <div class="leave-review">
+                    <h4>Leave a review</h4>
+                    <textarea
+                      id="review-text"
+                      class="review-textarea"
+                      rows="4"
+                      placeholder="Write your review here..."
+                    ></textarea>
+                    <div class="review-actions">
+                      <button id="submit-review-btn" class="action-btn" type="button">
+                        Submit Review
+                      </button>
+                    </div>
+                    <p id="review-message"></p>
+                  </div>
+
+                  <div id="reviews-list" class="reviews-list">
+                    <p>Loading reviews...</p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -149,6 +199,17 @@
 
           // Load user's status for this book
           loadStatus();
+
+          const reviewBtn = document.getElementById("submit-review-btn");
+          if (reviewBtn) {
+            reviewBtn.addEventListener("click", submitReview);
+          }
+
+          // Load user's status for this book
+          loadStatus();
+
+          // Load reviews
+          loadReviews();
 
           // Load recommendations
           document
@@ -202,6 +263,99 @@
         } catch (error) {
           msgEl.textContent = "Error submitting rating.";
           msgEl.style.color = "red";
+        }
+      }
+
+      async function submitReview() {
+        const uid = localStorage.getItem("uid");
+        const username = localStorage.getItem("username");
+        const msgEl = document.getElementById("review-message");
+        const textEl = document.getElementById("review-text");
+
+        if (!uid) {
+          msgEl.textContent = "Please login to leave a review.";
+          msgEl.style.color = "red";
+          return;
+        }
+
+        const review = textEl.value.trim();
+
+        if (!review) {
+          msgEl.textContent = "Please write a review before submitting.";
+          msgEl.style.color = "red";
+          return;
+        }
+
+        if (!currentRating) {
+          msgEl.textContent = "Please rate the book before leaving a review.";
+          msgEl.style.color = "red";
+          return;
+        }
+
+        try {
+          const res = await fetch("/api/review", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              uid,
+              username,
+              book_id: parseInt(bookId),
+              rating: currentRating,
+              review,
+            }),
+          });
+
+          const data = await res.json();
+
+          if (res.ok) {
+            msgEl.textContent = "Review submitted successfully.";
+            msgEl.style.color = "green";
+            textEl.value = "";
+            loadReviews();
+          } else {
+            msgEl.textContent = data.error || "Failed to submit review.";
+            msgEl.style.color = "red";
+          }
+        } catch (error) {
+          msgEl.textContent = "Error submitting review.";
+          msgEl.style.color = "red";
+        }
+      }
+
+      async function loadReviews() {
+        const reviewsEl = document.getElementById("reviews-list");
+        if (!reviewsEl) return;
+
+        reviewsEl.innerHTML = "<p>Loading reviews...</p>";
+
+        try {
+          const res = await fetch(`/api/book/${bookId}/reviews`);
+          if (!res.ok) throw new Error("Failed to load reviews");
+
+          const reviews = await res.json();
+
+          if (!reviews.length) {
+            reviewsEl.innerHTML =
+              "<p>No reviews yet. Be the first to leave one.</p>";
+            return;
+          }
+
+          reviewsEl.innerHTML = reviews
+            .map(
+              (r) => `
+              <div class="review-card">
+                <div class="review-header">
+                  <span class="review-user">${escapeHtml(r.username || "Anonymous")}</span>
+                  <span class="review-stars">${renderStars(r.rating)}</span>
+                </div>
+                <p class="review-body">${escapeHtml(r.review)}</p>
+              </div>
+            `,
+            )
+            .join("");
+        } catch (error) {
+          reviewsEl.innerHTML = "<p>Error loading reviews.</p>";
+          console.error("Error loading reviews:", error);
         }
       }
 
@@ -280,7 +434,8 @@
           return;
         }
 
-        const endpoint = type === "read" ? "/api/mark-read" : "/api/mark-want-to-read";
+        const endpoint =
+          type === "read" ? "/api/mark-read" : "/api/mark-want-to-read";
 
         try {
           const res = await fetch(endpoint, {
@@ -332,14 +487,16 @@
             .map(
               (b) => `
               <a href="book.html?id=${b.book_id}" class="rec-card">
-                ${b.cover_image_url
-                  ? `<img src="${b.cover_image_url}" alt="${b.title}" />`
-                  : `<div class="no-cover-small">No Cover</div>`}
+                ${
+                  b.cover_image_url
+                    ? `<img src="${b.cover_image_url}" alt="${b.title}" />`
+                    : `<div class="no-cover-small">No Cover</div>`
+                }
                 <p class="rec-title">${b.title}</p>
                 <p class="rec-author">${b.author || "Unknown"}</p>
                 <p class="rec-reason">${b.reason || "Recommended because it is similar to this book."}</p>
                 <p class="rec-rating">Average rating: ${b.average_rating ? Number(b.average_rating).toFixed(2) : "N/A"} / 5</p>
-              </a>`
+              </a>`,
             )
             .join("");
         } catch (err) {
