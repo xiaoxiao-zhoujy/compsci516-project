@@ -686,6 +686,24 @@ app.post("/api/register", async (req, res) => {
         .json({ error: "username and password are required" });
     }
 
+    if (password.length < 8) {
+      return res
+        .status(400)
+        .json({ error: "Password must be at least 8 characters long" });
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      return res
+        .status(400)
+        .json({ error: "Password must contain at least one uppercase letter" });
+    }
+
+    if (!/\d/.test(password)) {
+      return res
+        .status(400)
+        .json({ error: "Password must contain at least one number" });
+    }
+
     const [existing] = await pool.execute(
       "SELECT uid FROM users WHERE username = ?",
       [username],
