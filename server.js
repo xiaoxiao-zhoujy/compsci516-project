@@ -9,6 +9,10 @@ const SEARCH_RESULT_LIMIT = 8;
 const RECOMMENDATION_LIMIT = 5;
 const RECOMMENDATION_POOL_LIMIT = 15;
 const CHALLENGE_CODE_LENGTH = 6;
+const DEFAULT_PROFILE_ICON_PATHS = Array.from(
+  { length: 6 },
+  (_, index) => `/assets/icons/icon${index + 1}.png`,
+);
 
 const pool = mysql.createPool({
   host: "127.0.0.1",
@@ -37,6 +41,16 @@ function sendServerError(res, context, error) {
 
 function getTrimmedQueryParam(value) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function pickRandomProfileIconPath() {
+  return DEFAULT_PROFILE_ICON_PATHS[
+    Math.floor(Math.random() * DEFAULT_PROFILE_ICON_PATHS.length)
+  ];
+}
+
+function isAllowedProfileIconPath(pathname) {
+  return DEFAULT_PROFILE_ICON_PATHS.includes(pathname);
 }
 
 function generateInviteCode() {
@@ -713,12 +727,14 @@ app.post("/api/register", async (req, res) => {
       return res.status(409).json({ error: "Username already exists" });
     }
 
+    const profileIconUrl = pickRandomProfileIconPath();
+
     const [result] = await pool.execute(
-      "INSERT INTO users (username, password) VALUES (?, ?)",
-      [username, password],
+      "INSERT INTO users (username, password, profile_icon_url) VALUES (?, ?, ?)",
+      [username, password, profileIconUrl],
     );
 
-    res.json({ uid: result.insertId, username });
+    res.json({ uid: result.insertId, username, profile_icon_url: profileIconUrl });
   } catch (error) {
     console.error("Register error:", error);
     res.status(500).json({ error: "Server error" });
@@ -737,7 +753,7 @@ app.post("/api/login", async (req, res) => {
     }
 
     const [rows] = await pool.execute(
-      "SELECT uid, username FROM users WHERE username = ? AND password = ?",
+      "SELECT uid, username, profile_icon_url FROM users WHERE username = ? AND password = ?",
       [username, password],
     );
 
@@ -745,10 +761,77 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    res.json({ uid: rows[0].uid, username: rows[0].username });
+    res.json({
+      uid: rows[0].uid,
+      username: rows[0].username,
+      profile_icon_url: rows[0].profile_icon_url || DEFAULT_PROFILE_ICON_PATHS[0],
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ── Available default profile icons: GET /api/profile-icons ──
+app.get("/api/profile-icons", (req, res) => {
+  res.json(DEFAULT_PROFILE_ICON_PATHS);
+});
+
+// ── Get user profile icon: GET /api/user/:uid/profile-icon ──
+app.get("/api/user/:uid/profile-icon", async (req, res) => {
+  try {
+    const uid = parsePositiveInt(req.params.uid);
+
+    if (!uid) {
+      return res.status(400).json({ error: "uid must be a positive integer" });
+    }
+
+    const [rows] = await pool.execute(
+      "SELECT profile_icon_url FROM users WHERE uid = ?",
+      [uid],
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({
+      uid,
+      profile_icon_url: rows[0].profile_icon_url || DEFAULT_PROFILE_ICON_PATHS[0],
+    });
+  } catch (error) {
+    sendServerError(res, "Get profile icon error", error);
+  }
+});
+
+// ── Update user profile icon: PATCH /api/user/:uid/profile-icon ──
+app.patch("/api/user/:uid/profile-icon", async (req, res) => {
+  try {
+    const uid = parsePositiveInt(req.params.uid);
+    const profileIconUrl = getTrimmedQueryParam(req.body.profile_icon_url);
+
+    if (!uid) {
+      return res.status(400).json({ error: "uid must be a positive integer" });
+    }
+
+    if (!isAllowedProfileIconPath(profileIconUrl)) {
+      return res.status(400).json({
+        error: "profile_icon_url must be one of the default icon paths",
+      });
+    }
+
+    const [result] = await pool.execute(
+      "UPDATE users SET profile_icon_url = ? WHERE uid = ?",
+      [profileIconUrl, uid],
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ uid, profile_icon_url: profileIconUrl });
+  } catch (error) {
+    sendServerError(res, "Update profile icon error", error);
   }
 });
 

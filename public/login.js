@@ -62,6 +62,7 @@ form.addEventListener("submit", async (event) => {
 
     localStorage.setItem("uid", data.uid);
     localStorage.setItem("username", data.username || username);
+    localStorage.setItem("profile_icon_url", data.profile_icon_url || "");
 
     window.location.href = "index.html";
   } catch (error) {
