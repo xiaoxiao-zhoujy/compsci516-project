@@ -3,6 +3,7 @@ const toggleRegister = document.getElementById("toggle-register");
 const form = document.getElementById("auth-form");
 const submitBtn = document.getElementById("submit-btn");
 const messageEl = document.getElementById("message");
+const passwordRulesEl = document.getElementById("password-rules");
 
 let mode = "login";
 
@@ -13,6 +14,7 @@ function setMode(nextMode) {
   toggleLogin.classList.toggle("active-btn", isLogin);
   toggleRegister.classList.toggle("active-btn", !isLogin);
   submitBtn.textContent = isLogin ? "Login" : "Register";
+  passwordRulesEl.style.display = isLogin ? "none" : "block";
   messageEl.textContent = "";
 }
 
