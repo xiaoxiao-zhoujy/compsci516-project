@@ -8,6 +8,7 @@
   </head>
   <body>
     <div class="container">
+      <a href="/" class="back-link">Back to Search</a>
       <h1>My Profile</h1>
 
       <div class="book-detail" style="max-width: 1000px;">
@@ -16,6 +17,19 @@
             <h2 id="user-name" style="margin: 0;">Hello!</h2>
             <button id="logout-btn" class="action-btn">Logout</button>
           </div>
+
+          <section class="profile-icon-section">
+            <h3 style="margin: 0 0 10px 0;">Profile Icon</h3>
+            <div class="profile-icon-current">
+              <img id="current-profile-icon" src="/assets/icons/icon1.png" alt="Current profile icon" />
+              <p id="profile-icon-label">Current icon</p>
+            </div>
+            <div id="profile-icon-options" class="profile-icon-options"></div>
+            <div class="profile-icon-actions">
+              <button id="save-profile-icon-btn" class="action-btn" type="button">Update Profile Icon</button>
+              <p id="profile-icon-message"></p>
+            </div>
+          </section>
 
           <section>
             <h3 style="margin: 0 0 10px 0;">Books I've Read</h3>

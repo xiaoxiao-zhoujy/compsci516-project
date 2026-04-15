@@ -57,16 +57,25 @@ function renderAuthHeader() {
 
   const uid = localStorage.getItem("uid");
   const username = localStorage.getItem("username");
+  const profileIconUrl = localStorage.getItem("profile_icon_url");
 
   headerEl.innerHTML = "";
 
   if (uid) {
-    const text = document.createElement("span");
-    text.textContent = "Logged in as ";
-
     const link = document.createElement("a");
     link.href = "profile.html";
-    link.textContent = username || "User";
+    link.className = "auth-user-link";
+
+    const icon = document.createElement("img");
+    icon.className = "auth-user-icon";
+    icon.src = profileIconUrl || "/assets/icons/icon1.png";
+    icon.alt = "Profile icon";
+
+    const name = document.createElement("span");
+    name.textContent = username || "User";
+
+    link.appendChild(icon);
+    link.appendChild(name);
 
     const logoutBtn = document.createElement("button");
     logoutBtn.className = "action-btn";
@@ -74,10 +83,10 @@ function renderAuthHeader() {
     logoutBtn.addEventListener("click", () => {
       localStorage.removeItem("uid");
       localStorage.removeItem("username");
+      localStorage.removeItem("profile_icon_url");
       window.location.href = "index.html";
     });
 
-    headerEl.appendChild(text);
     headerEl.appendChild(link);
     headerEl.appendChild(logoutBtn);
   } else {

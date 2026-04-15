@@ -43,16 +43,25 @@
 
         const uid = localStorage.getItem("uid");
         const username = localStorage.getItem("username");
+        const profileIconUrl = localStorage.getItem("profile_icon_url");
 
         headerEl.innerHTML = "";
 
         if (uid) {
-          const text = document.createElement("span");
-          text.textContent = "Logged in as ";
-
           const link = document.createElement("a");
           link.href = "profile.html";
-          link.textContent = username || "User";
+          link.className = "auth-user-link";
+
+          const icon = document.createElement("img");
+          icon.className = "auth-user-icon";
+          icon.src = profileIconUrl || "/assets/icons/icon1.png";
+          icon.alt = "Profile icon";
+
+          const name = document.createElement("span");
+          name.textContent = username || "User";
+
+          link.appendChild(icon);
+          link.appendChild(name);
 
           const logoutBtn = document.createElement("button");
           logoutBtn.className = "action-btn";
@@ -60,10 +69,10 @@
           logoutBtn.addEventListener("click", () => {
             localStorage.removeItem("uid");
             localStorage.removeItem("username");
+            localStorage.removeItem("profile_icon_url");
             window.location.href = "index.html";
           });
 
-          headerEl.appendChild(text);
           headerEl.appendChild(link);
           headerEl.appendChild(logoutBtn);
         } else {
@@ -345,7 +354,7 @@
               (r) => `
               <div class="review-card">
                 <div class="review-header">
-                  <span class="review-user">${escapeHtml(r.username || "Anonymous")}</span>
+                  <span class="review-user"><img class="user-icon-small" src="${escapeHtml(r.profile_icon_url || "/assets/icons/icon1.png")}" alt="${escapeHtml(r.username || "Anonymous")} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />${escapeHtml(r.username || "Anonymous")}</span>
                   <span class="review-stars">${renderStars(r.rating)}</span>
                 </div>
                 <p class="review-body">${escapeHtml(r.review)}</p>

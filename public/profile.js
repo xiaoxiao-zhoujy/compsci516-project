@@ -1,5 +1,10 @@
 const uid = localStorage.getItem("uid");
 const username = localStorage.getItem("username");
+const profileIconUrl = localStorage.getItem("profile_icon_url");
+const DEFAULT_PROFILE_ICON_PATHS = Array.from(
+  { length: 6 },
+  (_, index) => `/assets/icons/icon${index + 1}.png`,
+);
 
 const userNameEl = document.getElementById("user-name");
 const readListEl = document.getElementById("read-list");
@@ -15,8 +20,16 @@ const challengeMessageEl = document.getElementById("challenge-message");
 const challengeListEl = document.getElementById("challenge-list");
 const challengeEmptyEl = document.getElementById("challenge-empty");
 const challengeDetailEl = document.getElementById("challenge-detail");
+const currentProfileIconEl = document.getElementById("current-profile-icon");
+const profileIconOptionsEl = document.getElementById("profile-icon-options");
+const saveProfileIconBtn = document.getElementById("save-profile-icon-btn");
+const profileIconMessageEl = document.getElementById("profile-icon-message");
 
 let selectedChallengeId = null;
+let selectedProfileIconUrl =
+  profileIconUrl && DEFAULT_PROFILE_ICON_PATHS.includes(profileIconUrl)
+    ? profileIconUrl
+    : DEFAULT_PROFILE_ICON_PATHS[0];
 
 function createBookCard(book) {
   const card = document.createElement("div");
@@ -57,6 +70,10 @@ function createChallengeCard(challenge) {
   const title = document.createElement("h5");
   title.textContent = challenge.name;
 
+  const creator = document.createElement("p");
+  creator.className = "challenge-card-meta";
+  creator.innerHTML = `<img class="user-icon-small" src="${challenge.creator_profile_icon_url || "/assets/icons/icon1.png"}" alt="${challenge.creator_name || "Creator"} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />Created by ${challenge.creator_name || "Unknown"}`;
+
   const meta = document.createElement("p");
   meta.className = "challenge-card-meta";
   meta.textContent = `${challenge.book_count} books • ${challenge.member_count} members`;
@@ -75,6 +92,7 @@ function createChallengeCard(challenge) {
   });
 
   card.appendChild(title);
+  card.appendChild(creator);
   card.appendChild(meta);
   card.appendChild(code);
 
@@ -92,6 +110,81 @@ function createChallengeCard(challenge) {
 function setChallengeMessage(text, color = "#2a5db0") {
   challengeMessageEl.textContent = text;
   challengeMessageEl.style.color = text ? color : "";
+}
+
+function setProfileIconMessage(text, color = "#2a5db0") {
+  profileIconMessageEl.textContent = text;
+  profileIconMessageEl.style.color = text ? color : "";
+}
+
+function renderProfileIconOptions() {
+  profileIconOptionsEl.innerHTML = "";
+
+  DEFAULT_PROFILE_ICON_PATHS.forEach((iconPath) => {
+    const optionBtn = document.createElement("button");
+    optionBtn.type = "button";
+    optionBtn.className = "profile-icon-option";
+    optionBtn.classList.toggle("selected", iconPath === selectedProfileIconUrl);
+    optionBtn.setAttribute("aria-label", `Choose ${iconPath.split("/").pop()}`);
+
+    const img = document.createElement("img");
+    img.src = iconPath;
+    img.alt = "Profile icon option";
+
+    optionBtn.appendChild(img);
+    optionBtn.addEventListener("click", () => {
+      selectedProfileIconUrl = iconPath;
+      currentProfileIconEl.src = iconPath;
+      renderProfileIconOptions();
+      setProfileIconMessage("");
+    });
+
+    profileIconOptionsEl.appendChild(optionBtn);
+  });
+}
+
+async function loadCurrentProfileIcon() {
+  if (!ensureLoggedIn()) return;
+
+  try {
+    const res = await fetch(`/api/user/${uid}/profile-icon`);
+    const data = await res.json();
+
+    if (res.ok && data.profile_icon_url) {
+      selectedProfileIconUrl = data.profile_icon_url;
+      localStorage.setItem("profile_icon_url", data.profile_icon_url);
+    }
+  } catch (error) {
+    // Keep selectedProfileIconUrl fallback
+  }
+
+  currentProfileIconEl.src = selectedProfileIconUrl;
+  renderProfileIconOptions();
+}
+
+async function updateProfileIcon() {
+  if (!ensureLoggedIn()) return;
+  setProfileIconMessage("");
+
+  try {
+    const res = await fetch(`/api/user/${uid}/profile-icon`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profile_icon_url: selectedProfileIconUrl }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      setProfileIconMessage(data.error || "Unable to update profile icon.", "red");
+      return;
+    }
+
+    localStorage.setItem("profile_icon_url", data.profile_icon_url);
+    currentProfileIconEl.src = data.profile_icon_url;
+    setProfileIconMessage("Profile icon updated.", "green");
+  } catch (error) {
+    setProfileIconMessage("Unable to update profile icon right now.", "red");
+  }
 }
 
 function ensureLoggedIn() {
@@ -139,7 +232,12 @@ async function loadChallengeDetail(challengeId) {
       throw new Error(data.error || "Unable to load challenge");
     }
 
-    const memberItems = data.members.map((member) => `<li>${member.username}</li>`).join("");
+    const memberItems = data.members
+      .map(
+        (member) =>
+          `<li><img class="user-icon-small" src="${member.profile_icon_url || "/assets/icons/icon1.png"}" alt="${member.username} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />${member.username}</li>`,
+      )
+      .join("");
 
     challengeDetailEl.innerHTML = `
       <div class="challenge-detail-card">
@@ -150,6 +248,7 @@ async function loadChallengeDetail(challengeId) {
           </div>
           <p class="challenge-detail-meta">Created by ${data.challenge.creator_name}</p>
         </div>
+        <p class="challenge-detail-meta"><img class="user-icon-small" src="${data.challenge.creator_profile_icon_url || "/assets/icons/icon1.png"}" alt="${data.challenge.creator_name} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />Challenge creator</p>
         ${
           data.challenge.description
             ? `<p class="challenge-detail-description">${data.challenge.description}</p>`
@@ -238,8 +337,11 @@ async function loadLibrary() {
 document.getElementById("logout-btn").addEventListener("click", () => {
   localStorage.removeItem("uid");
   localStorage.removeItem("username");
+  localStorage.removeItem("profile_icon_url");
   window.location.href = "login.html";
 });
+
+saveProfileIconBtn.addEventListener("click", updateProfileIcon);
 
 challengeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -310,3 +412,4 @@ joinChallengeForm.addEventListener("submit", async (event) => {
 
 loadLibrary();
 loadChallenges();
+loadCurrentProfileIcon();
