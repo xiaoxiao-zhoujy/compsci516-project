@@ -457,10 +457,16 @@ app.get("/api/book/:id/reviews", async (req, res) => {
     }
 
     const [rows] = await pool.execute(
-      `SELECT username, rating, review, created_at
-       FROM reviews
-       WHERE book_id = ?
-       ORDER BY created_at DESC`,
+      `SELECT
+         COALESCE(u.username, r.username) AS username,
+         COALESCE(u.profile_icon_url, '/assets/icons/icon1.png') AS profile_icon_url,
+         r.rating,
+         r.review,
+         r.created_at
+       FROM reviews r
+       LEFT JOIN users u ON r.uid = u.uid
+       WHERE r.book_id = ?
+       ORDER BY r.created_at DESC`,
       [bookId],
     );
 
@@ -1037,11 +1043,14 @@ app.get("/api/challenges/user/:uid", async (req, res) => {
          c.description,
          c.invite_code,
          c.created_at,
+         u.username AS creator_name,
+         u.profile_icon_url AS creator_profile_icon_url,
          CASE WHEN c.created_by = ? THEN 1 ELSE 0 END AS is_creator,
          (SELECT COUNT(*) FROM challenge_members cm WHERE cm.challenge_id = c.challenge_id) AS member_count,
          (SELECT COUNT(*) FROM challenge_books cb WHERE cb.challenge_id = c.challenge_id) AS book_count
        FROM reading_challenges c
        JOIN challenge_members cm ON cm.challenge_id = c.challenge_id
+       JOIN users u ON c.created_by = u.uid
        WHERE cm.uid = ?
        ORDER BY c.created_at DESC, c.challenge_id DESC`,
       [uid, uid],
@@ -1085,7 +1094,8 @@ app.get("/api/challenges/:id", async (req, res) => {
          c.description,
          c.invite_code,
          c.created_at,
-         u.username AS creator_name
+         u.username AS creator_name,
+         u.profile_icon_url AS creator_profile_icon_url
        FROM reading_challenges c
        JOIN users u ON c.created_by = u.uid
        WHERE c.challenge_id = ?`,
@@ -1097,7 +1107,7 @@ app.get("/api/challenges/:id", async (req, res) => {
     }
 
     const [memberRows] = await pool.execute(
-      `SELECT u.uid, u.username
+      `SELECT u.uid, u.username, u.profile_icon_url
        FROM challenge_members cm
        JOIN users u ON cm.uid = u.uid
        WHERE cm.challenge_id = ?

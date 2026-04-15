@@ -354,7 +354,7 @@
               (r) => `
               <div class="review-card">
                 <div class="review-header">
-                  <span class="review-user">${escapeHtml(r.username || "Anonymous")}</span>
+                  <span class="review-user"><img class="user-icon-small" src="${escapeHtml(r.profile_icon_url || "/assets/icons/icon1.png")}" alt="${escapeHtml(r.username || "Anonymous")} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />${escapeHtml(r.username || "Anonymous")}</span>
                   <span class="review-stars">${renderStars(r.rating)}</span>
                 </div>
                 <p class="review-body">${escapeHtml(r.review)}</p>

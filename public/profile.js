@@ -70,6 +70,10 @@ function createChallengeCard(challenge) {
   const title = document.createElement("h5");
   title.textContent = challenge.name;
 
+  const creator = document.createElement("p");
+  creator.className = "challenge-card-meta";
+  creator.innerHTML = `<img class="user-icon-small" src="${challenge.creator_profile_icon_url || "/assets/icons/icon1.png"}" alt="${challenge.creator_name || "Creator"} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />Created by ${challenge.creator_name || "Unknown"}`;
+
   const meta = document.createElement("p");
   meta.className = "challenge-card-meta";
   meta.textContent = `${challenge.book_count} books • ${challenge.member_count} members`;
@@ -88,6 +92,7 @@ function createChallengeCard(challenge) {
   });
 
   card.appendChild(title);
+  card.appendChild(creator);
   card.appendChild(meta);
   card.appendChild(code);
 
@@ -227,7 +232,12 @@ async function loadChallengeDetail(challengeId) {
       throw new Error(data.error || "Unable to load challenge");
     }
 
-    const memberItems = data.members.map((member) => `<li>${member.username}</li>`).join("");
+    const memberItems = data.members
+      .map(
+        (member) =>
+          `<li><img class="user-icon-small" src="${member.profile_icon_url || "/assets/icons/icon1.png"}" alt="${member.username} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />${member.username}</li>`,
+      )
+      .join("");
 
     challengeDetailEl.innerHTML = `
       <div class="challenge-detail-card">
@@ -238,6 +248,7 @@ async function loadChallengeDetail(challengeId) {
           </div>
           <p class="challenge-detail-meta">Created by ${data.challenge.creator_name}</p>
         </div>
+        <p class="challenge-detail-meta"><img class="user-icon-small" src="${data.challenge.creator_profile_icon_url || "/assets/icons/icon1.png"}" alt="${data.challenge.creator_name} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />Challenge creator</p>
         ${
           data.challenge.description
             ? `<p class="challenge-detail-description">${data.challenge.description}</p>`
