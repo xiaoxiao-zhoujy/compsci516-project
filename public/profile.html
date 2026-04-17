@@ -31,6 +31,40 @@
             </div>
           </section>
 
+          <section class="social-section">
+            <h3 style="margin: 0 0 10px 0;">People</h3>
+            <p class="profile-section-note">
+              Follow people for their activity, or add friends when both of you want to connect.
+            </p>
+
+            <form id="user-search-form" class="social-search-form">
+              <label for="user-search-input">Find users</label>
+              <div class="social-search-row">
+                <input id="user-search-input" type="text" placeholder="Search by username" />
+                <button class="action-btn" type="submit">Search</button>
+              </div>
+            </form>
+
+            <p id="social-message" class="profile-review-message"></p>
+            <div id="profile-social-actions" class="social-user-list"></div>
+            <div id="user-search-results" class="social-user-list"></div>
+
+            <div class="social-columns">
+              <div>
+                <h4>Friend requests</h4>
+                <div id="friend-requests" class="social-user-list"></div>
+              </div>
+              <div>
+                <h4>Friends</h4>
+                <div id="friend-list" class="social-user-list"></div>
+              </div>
+              <div>
+                <h4>Following</h4>
+                <div id="following-list" class="social-user-list"></div>
+              </div>
+            </div>
+          </section>
+
           <section>
             <h3 style="margin: 0 0 10px 0;">Books I've Read</h3>
             <div id="read-list" style="display: flex; flex-wrap: wrap; gap: 16px;"></div>
@@ -38,9 +72,67 @@
           </section>
 
           <section>
+            <h3 style="margin: 0 0 10px 0;">Currently Reading</h3>
+            <div id="current-list" style="display: flex; flex-wrap: wrap; gap: 16px;"></div>
+            <p id="current-empty" style="margin: 10px 0 0 0; color: #777;"></p>
+          </section>
+
+          <section>
             <h3 style="margin: 0 0 10px 0;">Want to Read</h3>
             <div id="want-list" style="display: flex; flex-wrap: wrap; gap: 16px;"></div>
             <p id="want-empty" style="margin: 10px 0 0 0; color: #777;"></p>
+          </section>
+
+          <section class="personal-review-section">
+            <h3 style="margin: 0 0 10px 0;">My Activity</h3>
+            <p class="profile-section-note">
+              Post a comment or review for a book from one of your shelves.
+            </p>
+
+            <form id="profile-review-form" class="profile-review-form">
+              <label for="review-book-select">Book</label>
+              <select id="review-book-select" required>
+                <option value="">Choose a book from your library</option>
+              </select>
+
+              <label for="profile-review-rating">Rating</label>
+              <select id="profile-review-rating">
+                <option value="">No rating</option>
+                <option value="5">5 - Loved it</option>
+                <option value="4">4 - Really liked it</option>
+                <option value="3">3 - It was okay</option>
+                <option value="2">2 - Not for me</option>
+                <option value="1">1 - Did not like it</option>
+              </select>
+
+              <label for="profile-review-text">Review or opinion</label>
+              <textarea
+                id="profile-review-text"
+                class="review-textarea"
+                rows="4"
+                placeholder="Share what you thought about this book..."
+                required
+              ></textarea>
+
+              <button class="action-btn" type="submit">Post activity</button>
+            </form>
+
+            <p id="profile-review-message" class="profile-review-message"></p>
+
+            <div>
+              <h4 style="margin: 0 0 10px 0;">Your activity</h4>
+              <div id="profile-review-list" class="profile-review-list"></div>
+              <p id="profile-review-empty" class="profile-review-empty"></p>
+            </div>
+          </section>
+
+          <section class="activity-feed-section">
+            <h3 style="margin: 0 0 10px 0;">Social Activity</h3>
+            <p class="profile-section-note">
+              See activity from you, friends, and people you follow.
+            </p>
+            <div id="activity-feed" class="activity-feed"></div>
+            <p id="activity-feed-empty" class="profile-review-empty"></p>
           </section>
 
           <section class="challenge-section">

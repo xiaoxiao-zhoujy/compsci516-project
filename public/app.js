@@ -1,24 +1,27 @@
 async function searchBooks() {
-  const searchInput = document.getElementById("searchInput");
+  const titleInput = document.getElementById("titleInput");
+  const authorInput = document.getElementById("authorInput");
+  const genreInput = document.getElementById("genreInput");
   const resultsEl = document.getElementById("results");
 
-  const q = searchInput.value.trim();
-  const selectedRadio = document.querySelector(
-    'input[name="searchField"]:checked',
-  );
-  const field = selectedRadio ? selectedRadio.value : "title";
+  const searchParams = new URLSearchParams();
+  const title = titleInput.value.trim();
+  const author = authorInput.value.trim();
+  const genre = genreInput.value.trim();
 
   resultsEl.innerHTML = "";
 
-  if (!q) {
-    resultsEl.innerHTML = "<li>Please enter a search term.</li>";
+  if (!title && !author && !genre) {
+    resultsEl.innerHTML = "<li>Please enter at least one search term.</li>";
     return;
   }
 
+  if (title) searchParams.set("title", title);
+  if (author) searchParams.set("author", author);
+  if (genre) searchParams.set("genre", genre);
+
   try {
-    const response = await fetch(
-      `/api/search?q=${encodeURIComponent(q)}&field=${encodeURIComponent(field)}`,
-    );
+    const response = await fetch(`/api/search?${searchParams.toString()}`);
 
     if (!response.ok) {
       throw new Error("Search request failed");
@@ -32,12 +35,7 @@ async function searchBooks() {
     }
 
     books.forEach((book) => {
-      const li = document.createElement("li");
-      const a = document.createElement("a");
-      a.href = `book.html?id=${book.book_id}`;
-      a.textContent = `${book.title} by ${book.author}`;
-      li.appendChild(a);
-      resultsEl.appendChild(li);
+      resultsEl.appendChild(createSearchResultCard(book));
     });
   } catch (error) {
     console.error("Search failed:", error);
@@ -45,11 +43,85 @@ async function searchBooks() {
   }
 }
 
-document.getElementById("searchInput").addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
-    searchBooks();
+function createSearchResultCard(book) {
+  const li = document.createElement("li");
+  li.className = "search-result-card";
+
+  const link = document.createElement("a");
+  link.className = "search-result-link";
+  link.href = `book.html?id=${book.book_id}`;
+
+  if (book.cover_image_url) {
+    const cover = document.createElement("img");
+    cover.className = "search-result-cover";
+    cover.src = book.cover_image_url;
+    cover.alt = `${book.title} cover`;
+    link.appendChild(cover);
+  } else {
+    const coverPlaceholder = document.createElement("div");
+    coverPlaceholder.className = "search-result-cover search-result-cover-placeholder";
+    coverPlaceholder.textContent = "No Cover";
+    link.appendChild(coverPlaceholder);
   }
+
+  const content = document.createElement("div");
+  content.className = "search-result-content";
+
+  const title = document.createElement("h2");
+  title.className = "search-result-title";
+  title.textContent = book.title;
+
+  const author = document.createElement("p");
+  author.className = "search-result-author";
+  author.textContent = `by ${book.author || "Unknown author"}`;
+
+  const meta = document.createElement("div");
+  meta.className = "search-result-meta";
+
+  if (book.primary_genre || book.genres) {
+    const genre = document.createElement("span");
+    genre.className = "search-result-pill";
+    genre.textContent = book.primary_genre || String(book.genres).split(",")[0];
+    meta.appendChild(genre);
+  }
+
+  const rating = document.createElement("span");
+  rating.className = "search-result-rating";
+  rating.textContent = `Rating: ${
+    book.average_rating ? Number(book.average_rating).toFixed(2) : "N/A"
+  } / 5`;
+  meta.appendChild(rating);
+
+  content.appendChild(title);
+  content.appendChild(author);
+  content.appendChild(meta);
+
+  if (book.match_reason) {
+    const reason = document.createElement("p");
+    reason.className = "search-match-reason";
+    reason.textContent = book.match_reason;
+    content.appendChild(reason);
+  }
+
+  const cta = document.createElement("span");
+  cta.className = "search-result-cta";
+  cta.textContent = "View details";
+  content.appendChild(cta);
+
+  link.appendChild(content);
+  li.appendChild(link);
+  return li;
+}
+
+["titleInput", "authorInput", "genreInput"].forEach((inputId) => {
+  document.getElementById(inputId).addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      searchBooks();
+    }
+  });
 });
+
+document.getElementById("searchButton").addEventListener("click", searchBooks);
 
 function renderAuthHeader() {
   const headerEl = document.getElementById("auth-header");

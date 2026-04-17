@@ -1,6 +1,9 @@
 const uid = localStorage.getItem("uid");
 const username = localStorage.getItem("username");
 const profileIconUrl = localStorage.getItem("profile_icon_url");
+const profileParams = new URLSearchParams(window.location.search);
+const viewedUid = profileParams.get("uid") || uid;
+const isOwnProfile = String(viewedUid) === String(uid);
 const DEFAULT_PROFILE_ICON_PATHS = Array.from(
   { length: 6 },
   (_, index) => `/assets/icons/icon${index + 1}.png`,
@@ -8,8 +11,10 @@ const DEFAULT_PROFILE_ICON_PATHS = Array.from(
 
 const userNameEl = document.getElementById("user-name");
 const readListEl = document.getElementById("read-list");
+const currentListEl = document.getElementById("current-list");
 const wantListEl = document.getElementById("want-list");
 const readEmptyEl = document.getElementById("read-empty");
+const currentEmptyEl = document.getElementById("current-empty");
 const wantEmptyEl = document.getElementById("want-empty");
 const challengeForm = document.getElementById("challenge-form");
 const joinChallengeForm = document.getElementById("join-challenge-form");
@@ -20,10 +25,32 @@ const challengeMessageEl = document.getElementById("challenge-message");
 const challengeListEl = document.getElementById("challenge-list");
 const challengeEmptyEl = document.getElementById("challenge-empty");
 const challengeDetailEl = document.getElementById("challenge-detail");
+const profileReviewForm = document.getElementById("profile-review-form");
+const reviewBookSelectEl = document.getElementById("review-book-select");
+const profileReviewRatingEl = document.getElementById("profile-review-rating");
+const profileReviewTextEl = document.getElementById("profile-review-text");
+const profileReviewMessageEl = document.getElementById("profile-review-message");
+const profileReviewListEl = document.getElementById("profile-review-list");
+const profileReviewEmptyEl = document.getElementById("profile-review-empty");
 const currentProfileIconEl = document.getElementById("current-profile-icon");
 const profileIconOptionsEl = document.getElementById("profile-icon-options");
 const saveProfileIconBtn = document.getElementById("save-profile-icon-btn");
 const profileIconMessageEl = document.getElementById("profile-icon-message");
+const userSearchForm = document.getElementById("user-search-form");
+const userSearchInput = document.getElementById("user-search-input");
+const userSearchResultsEl = document.getElementById("user-search-results");
+const socialMessageEl = document.getElementById("social-message");
+const profileSocialActionsEl = document.getElementById("profile-social-actions");
+const friendRequestsEl = document.getElementById("friend-requests");
+const friendListEl = document.getElementById("friend-list");
+const followingListEl = document.getElementById("following-list");
+const activityFeedEl = document.getElementById("activity-feed");
+const activityFeedEmptyEl = document.getElementById("activity-feed-empty");
+const profileIconActionsEl = document.querySelector(".profile-icon-actions");
+const personalReviewSectionEl = document.querySelector(".personal-review-section");
+const socialSectionEl = document.querySelector(".social-section");
+const activityFeedSectionEl = document.querySelector(".activity-feed-section");
+const challengeSectionEl = document.querySelector(".challenge-section");
 
 let selectedChallengeId = null;
 let selectedProfileIconUrl =
@@ -59,6 +86,214 @@ function createBookCard(book) {
   link.appendChild(img);
   link.appendChild(title);
   card.appendChild(link);
+
+  return card;
+}
+
+function renderStars(rating) {
+  if (!rating) {
+    return "No rating";
+  }
+
+  const safeRating = Math.max(0, Math.min(5, Number(rating) || 0));
+  let stars = "";
+  for (let i = 1; i <= 5; i += 1) {
+    stars += i <= safeRating ? "★" : "☆";
+  }
+  return stars;
+}
+
+function setSocialMessage(text, color = "#2a5db0") {
+  socialMessageEl.textContent = text;
+  socialMessageEl.style.color = text ? color : "";
+}
+
+function createReviewCard(review) {
+  const card = document.createElement("article");
+  card.className = "profile-review-card";
+
+  const link = document.createElement("a");
+  link.className = "profile-review-book";
+  link.href = `book.html?id=${review.book_id}`;
+
+  const cover = document.createElement("img");
+  cover.src = review.cover_image_url || "";
+  cover.alt = `${review.title} cover`;
+  cover.onerror = () => {
+    cover.style.display = "none";
+  };
+
+  const content = document.createElement("div");
+  content.className = "profile-review-content";
+
+  const title = document.createElement("h5");
+  title.textContent = review.title;
+
+  const author = document.createElement("p");
+  author.className = "profile-review-author";
+  author.textContent = `by ${review.author || "Unknown author"}`;
+
+  const stars = document.createElement("p");
+  stars.className = "review-stars";
+  stars.textContent = renderStars(review.rating);
+
+  const body = document.createElement("p");
+  body.className = "review-body";
+  body.textContent = review.review;
+
+  content.appendChild(title);
+  content.appendChild(author);
+  content.appendChild(stars);
+  content.appendChild(body);
+  link.appendChild(cover);
+  link.appendChild(content);
+  card.appendChild(link);
+
+  return card;
+}
+
+function createUserRow(user, actions = []) {
+  const row = document.createElement("div");
+  row.className = "social-user-row";
+
+  const identity = document.createElement("div");
+  identity.className = "social-user-identity";
+
+  const icon = document.createElement("img");
+  icon.className = "user-icon-small";
+  icon.src = user.profile_icon_url || "/assets/icons/icon1.png";
+  icon.alt = `${user.username} icon`;
+  icon.onerror = () => {
+    icon.src = "/assets/icons/icon1.png";
+  };
+
+  const name = document.createElement("span");
+  name.textContent = user.username;
+
+  identity.appendChild(icon);
+  identity.appendChild(name);
+  row.appendChild(identity);
+
+  if (actions.length > 0) {
+    const actionWrap = document.createElement("div");
+    actionWrap.className = "social-user-actions";
+
+    actions.forEach((action) => {
+      const button = document.createElement("button");
+      button.className = "action-btn";
+      button.type = "button";
+      button.textContent = action.label;
+      button.disabled = Boolean(action.disabled);
+      button.addEventListener("click", action.onClick);
+      actionWrap.appendChild(button);
+    });
+
+    row.appendChild(actionWrap);
+  }
+
+  return row;
+}
+
+function renderUserList(container, users, emptyText, getActions = () => []) {
+  container.innerHTML = "";
+
+  if (!users.length) {
+    const empty = document.createElement("p");
+    empty.className = "social-empty";
+    empty.textContent = emptyText;
+    container.appendChild(empty);
+    return;
+  }
+
+  users.forEach((user) => {
+    container.appendChild(createUserRow(user, getActions(user)));
+  });
+}
+
+function createActivityCard(activity) {
+  const card = document.createElement("article");
+  card.className = "activity-card";
+
+  const header = document.createElement("div");
+  header.className = "activity-header";
+
+  const user = document.createElement("span");
+  user.className = "activity-user";
+
+  const icon = document.createElement("img");
+  icon.className = "user-icon-small";
+  icon.src = activity.profile_icon_url || "/assets/icons/icon1.png";
+  icon.alt = `${activity.username} icon`;
+  icon.onerror = () => {
+    icon.src = "/assets/icons/icon1.png";
+  };
+
+  user.appendChild(icon);
+  user.appendChild(document.createTextNode(activity.username || "User"));
+
+  const rating = document.createElement("span");
+  rating.className = "review-stars";
+  rating.textContent = renderStars(activity.rating);
+
+  header.appendChild(user);
+  header.appendChild(rating);
+
+  const bookLink = document.createElement("a");
+  bookLink.className = "activity-book-link";
+  bookLink.href = `book.html?id=${activity.book_id}`;
+  bookLink.textContent = `${activity.title} by ${activity.author || "Unknown"}`;
+
+  const body = document.createElement("p");
+  body.className = "review-body";
+  body.textContent = activity.review;
+
+  const actions = document.createElement("div");
+  actions.className = "activity-actions";
+
+  const likeButton = document.createElement("button");
+  likeButton.className = "action-btn";
+  likeButton.type = "button";
+  likeButton.textContent = `${activity.liked_by_me ? "Unlike" : "Like"} (${activity.like_count || 0})`;
+  likeButton.addEventListener("click", () => toggleActivityLike(activity));
+
+  actions.appendChild(likeButton);
+
+  const comments = document.createElement("div");
+  comments.className = "activity-comments";
+
+  (activity.comments || []).forEach((comment) => {
+    const commentEl = document.createElement("p");
+    commentEl.className = "activity-comment";
+    commentEl.textContent = `${comment.username}: ${comment.comment}`;
+    comments.appendChild(commentEl);
+  });
+
+  const commentForm = document.createElement("form");
+  commentForm.className = "activity-comment-form";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Write a comment";
+  input.maxLength = 500;
+
+  const submit = document.createElement("button");
+  submit.className = "action-btn";
+  submit.type = "submit";
+  submit.textContent = "Comment";
+
+  commentForm.appendChild(input);
+  commentForm.appendChild(submit);
+  commentForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await addActivityComment(activity.review_id, input.value.trim());
+  });
+
+  card.appendChild(header);
+  card.appendChild(bookLink);
+  card.appendChild(body);
+  card.appendChild(actions);
+  card.appendChild(comments);
+  card.appendChild(commentForm);
 
   return card;
 }
@@ -117,6 +352,40 @@ function setProfileIconMessage(text, color = "#2a5db0") {
   profileIconMessageEl.style.color = text ? color : "";
 }
 
+function setProfileReviewMessage(text, color = "#2a5db0") {
+  profileReviewMessageEl.textContent = text;
+  profileReviewMessageEl.style.color = text ? color : "";
+}
+
+function renderReviewBookOptions(readBooks, currentBooks, wantBooks) {
+  reviewBookSelectEl.innerHTML = '<option value="">Choose a book from your library</option>';
+
+  const groups = [
+    { label: "Books I've Read", books: readBooks },
+    { label: "Currently Reading", books: currentBooks },
+    { label: "Want to Read", books: wantBooks },
+  ];
+
+  groups.forEach((group) => {
+    if (!group.books.length) return;
+
+    const optgroup = document.createElement("optgroup");
+    optgroup.label = group.label;
+
+    group.books.forEach((book) => {
+      const option = document.createElement("option");
+      option.value = book.book_id;
+      option.textContent = `${book.title} by ${book.author || "Unknown"}`;
+      optgroup.appendChild(option);
+    });
+
+    reviewBookSelectEl.appendChild(optgroup);
+  });
+
+  reviewBookSelectEl.disabled =
+    readBooks.length + currentBooks.length + wantBooks.length === 0;
+}
+
 function renderProfileIconOptions() {
   profileIconOptionsEl.innerHTML = "";
 
@@ -147,19 +416,26 @@ async function loadCurrentProfileIcon() {
   if (!ensureLoggedIn()) return;
 
   try {
-    const res = await fetch(`/api/user/${uid}/profile-icon`);
+    const res = await fetch(`/api/user/${viewedUid}/profile-icon`);
     const data = await res.json();
 
     if (res.ok && data.profile_icon_url) {
       selectedProfileIconUrl = data.profile_icon_url;
-      localStorage.setItem("profile_icon_url", data.profile_icon_url);
+      if (isOwnProfile) {
+        localStorage.setItem("profile_icon_url", data.profile_icon_url);
+      }
     }
   } catch (error) {
     // Keep selectedProfileIconUrl fallback
   }
 
   currentProfileIconEl.src = selectedProfileIconUrl;
-  renderProfileIconOptions();
+  if (isOwnProfile) {
+    renderProfileIconOptions();
+  } else {
+    profileIconOptionsEl.innerHTML = "";
+    if (profileIconActionsEl) profileIconActionsEl.style.display = "none";
+  }
 }
 
 async function updateProfileIcon() {
@@ -192,8 +468,91 @@ function ensureLoggedIn() {
     window.location.href = "login.html";
     return false;
   }
-  userNameEl.textContent = username ? `Hello, ${username}!` : "Hello!";
   return true;
+}
+
+async function loadProfileHeader() {
+  if (!ensureLoggedIn()) return;
+
+  if (isOwnProfile) {
+    userNameEl.textContent = username ? `Hello, ${username}!` : "Hello!";
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `/api/user/${viewedUid}?viewer_uid=${encodeURIComponent(uid)}`,
+    );
+    const user = await res.json();
+
+    if (!res.ok) {
+      throw new Error(user.error || "Unable to load profile");
+    }
+
+    userNameEl.textContent = `${user.username}'s Profile`;
+    renderViewedProfileActions(user);
+  } catch (error) {
+    userNameEl.textContent = "User Profile";
+  }
+}
+
+function applyProfileMode() {
+  if (isOwnProfile) return;
+
+  if (profileReviewForm) profileReviewForm.style.display = "none";
+  if (userSearchForm) userSearchForm.style.display = "none";
+  if (userSearchResultsEl) userSearchResultsEl.style.display = "none";
+  if (document.querySelector(".social-columns")) {
+    document.querySelector(".social-columns").style.display = "none";
+  }
+  if (challengeSectionEl) challengeSectionEl.style.display = "none";
+  if (personalReviewSectionEl) {
+    personalReviewSectionEl.style.display = "none";
+  }
+  if (socialSectionEl) {
+    const heading = socialSectionEl.querySelector("h3");
+    const note = socialSectionEl.querySelector(".profile-section-note");
+    if (heading) heading.textContent = "Connect";
+    if (note) note.textContent = "Follow this user or send a friend request.";
+  }
+  if (activityFeedSectionEl) {
+    const heading = activityFeedSectionEl.querySelector("h3");
+    const note = activityFeedSectionEl.querySelector(".profile-section-note");
+    if (heading) heading.textContent = "Activity";
+    if (note) note.textContent = "Like or comment on this user's activity.";
+  }
+}
+
+function renderViewedProfileActions(user) {
+  if (!profileSocialActionsEl || isOwnProfile) return;
+
+  const actions = [
+    {
+      label: user.is_following ? "Unfollow" : "Follow",
+      onClick: () => updateFollow(user.uid, !user.is_following),
+    },
+  ];
+
+  if (user.friendship_status === "accepted") {
+    actions.push({ label: "Friends", disabled: true });
+  } else if (
+    user.friendship_status === "pending" &&
+    Number(user.requested_by_uid) === Number(uid)
+  ) {
+    actions.push({ label: "Request sent", disabled: true });
+  } else if (user.friendship_status === "pending") {
+    actions.push({
+      label: "Accept friend",
+      onClick: () => requestFriend(user.uid),
+    });
+  } else {
+    actions.push({
+      label: "Add friend",
+      onClick: () => requestFriend(user.uid),
+    });
+  }
+
+  renderUserList(profileSocialActionsEl, [user], "", () => actions);
 }
 
 function renderChallengeList(challenges) {
@@ -302,24 +661,311 @@ async function loadChallenges(preferredChallengeId) {
   }
 }
 
+async function loadUserReviews() {
+  if (!ensureLoggedIn()) return;
+
+  try {
+    const res = await fetch(`/api/user/${viewedUid}/reviews`);
+    const reviews = await res.json();
+
+    if (!res.ok) {
+      throw new Error(reviews.error || "Unable to load reviews");
+    }
+
+    profileReviewListEl.innerHTML = "";
+
+    if (!Array.isArray(reviews) || reviews.length === 0) {
+      profileReviewEmptyEl.textContent = isOwnProfile
+        ? "You have not posted any activity yet."
+        : "No activity yet.";
+      return;
+    }
+
+    profileReviewEmptyEl.textContent = "";
+    reviews.forEach((review) => {
+      profileReviewListEl.appendChild(createReviewCard(review));
+    });
+  } catch (error) {
+    profileReviewEmptyEl.textContent = "Unable to load your activity right now.";
+  }
+}
+
+async function loadSocial() {
+  if (!ensureLoggedIn()) return;
+
+  try {
+    const res = await fetch(`/api/user/${uid}/social`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Unable to load social info");
+    }
+
+    renderUserList(
+      friendRequestsEl,
+      data.pending_requests || [],
+      "No pending friend requests.",
+      (user) => [
+        {
+          label: "Accept",
+          onClick: () => respondToFriendRequest(user.uid, "accept"),
+        },
+        {
+          label: "Decline",
+          onClick: () => respondToFriendRequest(user.uid, "decline"),
+        },
+      ],
+    );
+    renderUserList(friendListEl, data.friends || [], "No friends yet.");
+    renderUserList(followingListEl, data.following || [], "Not following anyone yet.", (user) => [
+      {
+        label: "Unfollow",
+        onClick: () => updateFollow(user.uid, false),
+      },
+    ]);
+  } catch (error) {
+    setSocialMessage("Unable to load social info right now.", "red");
+  }
+}
+
+async function searchUsers() {
+  const query = userSearchInput.value.trim();
+  userSearchResultsEl.innerHTML = "";
+  setSocialMessage("");
+
+  if (!query) {
+    setSocialMessage("Enter a username to search.", "red");
+    return;
+  }
+
+  try {
+    const res = await fetch(
+      `/api/users/search?uid=${encodeURIComponent(uid)}&q=${encodeURIComponent(query)}`,
+    );
+    const users = await res.json();
+
+    if (!res.ok) {
+      throw new Error(users.error || "Unable to search users");
+    }
+
+    renderUserList(userSearchResultsEl, users, "No users found.", (user) => {
+      const actions = [
+        {
+          label: user.is_following ? "Unfollow" : "Follow",
+          onClick: () => updateFollow(user.uid, !user.is_following),
+        },
+      ];
+
+      if (user.friendship_status === "accepted") {
+        actions.push({ label: "Friends", disabled: true });
+      } else if (
+        user.friendship_status === "pending" &&
+        Number(user.requested_by_uid) === Number(uid)
+      ) {
+        actions.push({ label: "Request sent", disabled: true });
+      } else if (user.friendship_status === "pending") {
+        actions.push({
+          label: "Accept friend",
+          onClick: () => requestFriend(user.uid),
+        });
+      } else {
+        actions.push({
+          label: "Add friend",
+          onClick: () => requestFriend(user.uid),
+        });
+      }
+
+      return actions;
+    });
+  } catch (error) {
+    setSocialMessage("Unable to search users right now.", "red");
+  }
+}
+
+async function updateFollow(targetUid, shouldFollow) {
+  const endpoint = shouldFollow ? "/api/follow" : "/api/unfollow";
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: Number(uid), target_uid: Number(targetUid) }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Unable to update follow");
+    }
+
+    setSocialMessage(data.message, "green");
+    await loadSocial();
+    await loadProfileHeader();
+    if (userSearchInput.value.trim()) await searchUsers();
+    await loadActivityFeed();
+  } catch (error) {
+    setSocialMessage("Unable to update follow right now.", "red");
+  }
+}
+
+async function requestFriend(targetUid) {
+  try {
+    const res = await fetch("/api/friend-request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: Number(uid), target_uid: Number(targetUid) }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Unable to update friend request");
+    }
+
+    setSocialMessage(data.message, "green");
+    await loadSocial();
+    await loadProfileHeader();
+    if (userSearchInput.value.trim()) await searchUsers();
+    await loadActivityFeed();
+  } catch (error) {
+    setSocialMessage("Unable to update friend request right now.", "red");
+  }
+}
+
+async function respondToFriendRequest(requesterUid, action) {
+  try {
+    const res = await fetch("/api/friend-request/respond", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        uid: Number(uid),
+        requester_uid: Number(requesterUid),
+        action,
+      }),
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || "Unable to respond to friend request");
+    }
+
+    setSocialMessage(data.message, "green");
+    await loadSocial();
+    await loadProfileHeader();
+    await loadActivityFeed();
+  } catch (error) {
+    setSocialMessage("Unable to respond to friend request right now.", "red");
+  }
+}
+
+async function loadActivityFeed() {
+  if (!ensureLoggedIn()) return;
+
+  try {
+    const targetQuery = isOwnProfile
+      ? ""
+      : `&target_uid=${encodeURIComponent(viewedUid)}`;
+    const res = await fetch(
+      `/api/activity?uid=${encodeURIComponent(uid)}${targetQuery}`,
+    );
+    const activities = await res.json();
+
+    if (!res.ok) {
+      throw new Error(activities.error || "Unable to load activity");
+    }
+
+    activityFeedEl.innerHTML = "";
+
+    if (!Array.isArray(activities) || activities.length === 0) {
+      activityFeedEmptyEl.textContent = isOwnProfile
+        ? "No activity yet. Follow people or add friends to see more here."
+        : "No activity yet.";
+      return;
+    }
+
+    activityFeedEmptyEl.textContent = "";
+    activities.forEach((activity) => {
+      activityFeedEl.appendChild(createActivityCard(activity));
+    });
+  } catch (error) {
+    activityFeedEmptyEl.textContent = "Unable to load activity right now.";
+  }
+}
+
+async function toggleActivityLike(activity) {
+  const endpoint = activity.liked_by_me
+    ? `/api/activity/${activity.review_id}/unlike`
+    : `/api/activity/${activity.review_id}/like`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: Number(uid) }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || "Unable to update like");
+    }
+
+    await loadActivityFeed();
+  } catch (error) {
+    activityFeedEmptyEl.textContent = "Unable to update like right now.";
+  }
+}
+
+async function addActivityComment(reviewId, comment) {
+  if (!comment) return;
+
+  try {
+    const res = await fetch(`/api/activity/${reviewId}/comments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ uid: Number(uid), comment }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || "Unable to add comment");
+    }
+
+    await loadActivityFeed();
+  } catch (error) {
+    activityFeedEmptyEl.textContent = "Unable to add comment right now.";
+  }
+}
+
 async function loadLibrary() {
   if (!ensureLoggedIn()) return;
 
   try {
-    const res = await fetch(`/api/user/${uid}/library`);
+    const res = await fetch(`/api/user/${viewedUid}/library`);
     const data = await res.json();
 
     const readBooks = data.read_books || [];
+    const currentBooks = data.currently_reading || [];
     const wantBooks = data.want_to_read || [];
 
     readListEl.innerHTML = "";
+    currentListEl.innerHTML = "";
     wantListEl.innerHTML = "";
+    if (isOwnProfile) {
+      renderReviewBookOptions(readBooks, currentBooks, wantBooks);
+    }
 
     if (readBooks.length === 0) {
       readEmptyEl.textContent = "You haven't added any books yet.";
     } else {
       readEmptyEl.textContent = "";
       readBooks.forEach((book) => readListEl.appendChild(createBookCard(book)));
+    }
+
+    if (currentBooks.length === 0) {
+      currentEmptyEl.textContent = "You aren't reading any books right now.";
+    } else {
+      currentEmptyEl.textContent = "";
+      currentBooks.forEach((book) =>
+        currentListEl.appendChild(createBookCard(book)),
+      );
     }
 
     if (wantBooks.length === 0) {
@@ -330,7 +976,9 @@ async function loadLibrary() {
     }
   } catch (error) {
     readEmptyEl.textContent = "Unable to load your library right now.";
+    currentEmptyEl.textContent = "";
     wantEmptyEl.textContent = "";
+    renderReviewBookOptions([], [], []);
   }
 }
 
@@ -341,7 +989,48 @@ document.getElementById("logout-btn").addEventListener("click", () => {
   window.location.href = "login.html";
 });
 
-saveProfileIconBtn.addEventListener("click", updateProfileIcon);
+if (isOwnProfile) {
+  saveProfileIconBtn.addEventListener("click", updateProfileIcon);
+
+  userSearchForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await searchUsers();
+  });
+
+  profileReviewForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    setProfileReviewMessage("");
+
+    try {
+      const selectedRating = profileReviewRatingEl.value;
+      const res = await fetch("/api/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uid: Number(uid),
+          username: username || "User",
+          book_id: Number(reviewBookSelectEl.value),
+          rating: selectedRating ? Number(selectedRating) : null,
+          review: profileReviewTextEl.value.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setProfileReviewMessage(data.error || "Unable to save activity.", "red");
+        return;
+      }
+
+      setProfileReviewMessage("Activity saved to your profile.", "green");
+      profileReviewForm.reset();
+      await loadUserReviews();
+      await loadActivityFeed();
+    } catch (error) {
+      setProfileReviewMessage("Unable to save activity right now.", "red");
+    }
+  });
+}
 
 challengeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -410,6 +1099,13 @@ joinChallengeForm.addEventListener("submit", async (event) => {
   }
 });
 
+applyProfileMode();
+loadProfileHeader();
 loadLibrary();
-loadChallenges();
+loadUserReviews();
+if (isOwnProfile) {
+  loadSocial();
+  loadChallenges();
+}
+loadActivityFeed();
 loadCurrentProfileIcon();
