@@ -20,6 +20,8 @@
       const bookId = params.get("id");
 
       function renderStars(rating) {
+        if (!rating) return "No rating";
+
         const safeRating = Math.max(0, Math.min(5, Number(rating) || 0));
         let stars = "";
         for (let i = 1; i <= 5; i++) {
@@ -134,6 +136,7 @@
 
                 <div class="action-buttons">
                   <button id="btn-read" class="action-btn" onclick="markAs('read')">Mark as Read</button>
+                  <button id="btn-current" class="action-btn" onclick="markAs('currently-reading')">Currently Reading</button>
                   <button id="btn-want" class="action-btn" onclick="markAs('want-to-read')">Mark as Want-to-Read</button>
                 </div>
                 <p id="status-message"></p>
@@ -156,7 +159,7 @@
                   <h3>Reviews</h3>
 
                   <div class="leave-review">
-                    <h4>Leave a review</h4>
+                    <h4>Leave a comment or review</h4>
                     <textarea
                       id="review-text"
                       class="review-textarea"
@@ -165,7 +168,7 @@
                     ></textarea>
                     <div class="review-actions">
                       <button id="submit-review-btn" class="action-btn" type="button">
-                        Submit Review
+                        Submit
                       </button>
                     </div>
                     <p id="review-message"></p>
@@ -295,21 +298,15 @@
           return;
         }
 
-        if (!currentRating) {
-          msgEl.textContent = "Please rate the book before leaving a review.";
-          msgEl.style.color = "red";
-          return;
-        }
-
         try {
           const res = await fetch("/api/review", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               uid,
-              username,
+              username: username || "User",
               book_id: parseInt(bookId),
-              rating: currentRating,
+              rating: currentRating || null,
               review,
             }),
           });
@@ -334,11 +331,13 @@
       async function loadReviews() {
         const reviewsEl = document.getElementById("reviews-list");
         if (!reviewsEl) return;
+        const uid = localStorage.getItem("uid");
 
         reviewsEl.innerHTML = "<p>Loading reviews...</p>";
 
         try {
-          const res = await fetch(`/api/book/${bookId}/reviews`);
+          const query = uid ? `?uid=${encodeURIComponent(uid)}` : "";
+          const res = await fetch(`/api/book/${bookId}/reviews${query}`);
           if (!res.ok) throw new Error("Failed to load reviews");
 
           const reviews = await res.json();
@@ -354,17 +353,96 @@
               (r) => `
               <div class="review-card">
                 <div class="review-header">
-                  <span class="review-user"><img class="user-icon-small" src="${escapeHtml(r.profile_icon_url || "/assets/icons/icon1.png")}" alt="${escapeHtml(r.username || "Anonymous")} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />${escapeHtml(r.username || "Anonymous")}</span>
+                  <a class="review-user profile-link" href="profile.html?uid=${encodeURIComponent(r.uid)}"><img class="user-icon-small" src="${escapeHtml(r.profile_icon_url || "/assets/icons/icon1.png")}" alt="${escapeHtml(r.username || "Anonymous")} icon" onerror="this.onerror=null;this.src='/assets/icons/icon1.png';" />${escapeHtml(r.username || "Anonymous")}</a>
                   <span class="review-stars">${renderStars(r.rating)}</span>
                 </div>
                 <p class="review-body">${escapeHtml(r.review)}</p>
+                <div class="activity-actions">
+                  <button class="action-btn review-like-btn" type="button" data-review-id="${r.review_id}" data-liked="${r.liked_by_me ? "true" : "false"}">
+                    ${r.liked_by_me ? "Unlike" : "Like"} (${r.like_count || 0})
+                  </button>
+                </div>
+                <div class="activity-comments">
+                  ${(r.comments || [])
+                    .map(
+                      (comment) =>
+                        `<p class="activity-comment">${escapeHtml(comment.username || "User")}: ${escapeHtml(comment.comment)}</p>`,
+                    )
+                    .join("")}
+                </div>
+                <form class="activity-comment-form review-comment-form" data-review-id="${r.review_id}">
+                  <input type="text" placeholder="Write a comment" maxlength="500" />
+                  <button class="action-btn" type="submit">Comment</button>
+                </form>
               </div>
             `,
             )
             .join("");
+
+          document.querySelectorAll(".review-like-btn").forEach((button) => {
+            button.addEventListener("click", () => {
+              toggleReviewLike(button.dataset.reviewId, button.dataset.liked === "true");
+            });
+          });
+
+          document.querySelectorAll(".review-comment-form").forEach((form) => {
+            form.addEventListener("submit", async (event) => {
+              event.preventDefault();
+              const input = form.querySelector("input");
+              await addReviewComment(form.dataset.reviewId, input.value.trim());
+            });
+          });
         } catch (error) {
           reviewsEl.innerHTML = "<p>Error loading reviews.</p>";
           console.error("Error loading reviews:", error);
+        }
+      }
+
+      async function toggleReviewLike(reviewId, likedByMe) {
+        const uid = localStorage.getItem("uid");
+        if (!uid) {
+          alert("Please login to like reviews.");
+          return;
+        }
+
+        const endpoint = likedByMe
+          ? `/api/activity/${reviewId}/unlike`
+          : `/api/activity/${reviewId}/like`;
+
+        try {
+          const res = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: Number(uid) }),
+          });
+
+          if (!res.ok) throw new Error("Failed to update like");
+          await loadReviews();
+        } catch (error) {
+          console.error("Like review error:", error);
+        }
+      }
+
+      async function addReviewComment(reviewId, comment) {
+        const uid = localStorage.getItem("uid");
+        if (!uid) {
+          alert("Please login to comment on reviews.");
+          return;
+        }
+
+        if (!comment) return;
+
+        try {
+          const res = await fetch(`/api/activity/${reviewId}/comments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ uid: Number(uid), comment }),
+          });
+
+          if (!res.ok) throw new Error("Failed to add comment");
+          await loadReviews();
+        } catch (error) {
+          console.error("Comment review error:", error);
         }
       }
 
@@ -387,15 +465,21 @@
 
           const statusEl = document.getElementById("status-message");
           const btnRead = document.getElementById("btn-read");
+          const btnCurrent = document.getElementById("btn-current");
           const btnWant = document.getElementById("btn-want");
 
           btnRead.classList.remove("active-btn");
+          btnCurrent.classList.remove("active-btn");
           btnWant.classList.remove("active-btn");
 
           if (data.status === "read") {
             statusEl.textContent = "You have read this book";
             statusEl.style.color = "#2a5db0";
             btnRead.classList.add("active-btn");
+          } else if (data.status === "currently-reading") {
+            statusEl.textContent = "On your currently reading shelf";
+            statusEl.style.color = "#2a5db0";
+            btnCurrent.classList.add("active-btn");
           } else if (data.status === "want-to-read") {
             statusEl.textContent = "On your want-to-read list";
             statusEl.style.color = "#2a5db0";
@@ -443,8 +527,12 @@
           return;
         }
 
-        const endpoint =
-          type === "read" ? "/api/mark-read" : "/api/mark-want-to-read";
+        const endpoints = {
+          read: "/api/mark-read",
+          "currently-reading": "/api/mark-currently-reading",
+          "want-to-read": "/api/mark-want-to-read",
+        };
+        const endpoint = endpoints[type];
 
         try {
           const res = await fetch(endpoint, {

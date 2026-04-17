@@ -12,27 +12,27 @@
       <h1>Welcome to betterreads</h1>
 
       <div class="search-layout">
-        <label for="searchInput" class="search-label">Search:</label>
+        <p class="search-label">Search:</p>
 
         <div class="search-controls">
-          <input id="searchInput" type="text" />
+          <label class="search-field">
+            <span>Title</span>
+            <input id="titleInput" type="text" autocomplete="off" />
+          </label>
 
-          <div class="radio-row">
-            <label>
-              <input type="radio" name="searchField" value="title" checked />
-              Title
-            </label>
+          <label class="search-field">
+            <span>Author</span>
+            <input id="authorInput" type="text" autocomplete="off" />
+          </label>
 
-            <label>
-              <input type="radio" name="searchField" value="author" />
-              Author
-            </label>
+          <label class="search-field">
+            <span>Genre</span>
+            <input id="genreInput" type="text" autocomplete="off" />
+          </label>
 
-            <label>
-              <input type="radio" name="searchField" value="genre" />
-              Genre
-            </label>
-          </div>
+          <button id="searchButton" class="action-btn" type="button">
+            Search
+          </button>
         </div>
       </div>
 
